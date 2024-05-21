@@ -1,0 +1,219 @@
+import mysql.connector
+import random
+
+# Connect to MySQL
+conn_obj = mysql.connector.connect(
+    host="localhost",
+    user="root",
+    password="Souvik@1996",
+    auth_plugin="mysql_native_password"
+)
+cur_obj = conn_obj.cursor()
+
+# Create a new database
+try:
+    cur_obj.execute("CREATE DATABASE IF NOT EXISTS retail_database")
+    conn_obj.commit()
+except mysql.connector.Error as err:
+    print(f"Error1: {err}")
+    conn_obj.rollback()
+
+# Use the created database
+try:
+    cur_obj.execute("USE retail_database")
+except mysql.connector.Error as err:
+    print(f"Error2: {err}")
+    conn_obj.rollback()
+
+# Create a users table
+cur_obj.execute('''
+    CREATE TABLE IF NOT EXISTS users (
+        user_id VARCHAR(50) PRIMARY KEY,
+        full_name VARCHAR(50) NOT NULL,
+        username VARCHAR(50) NOT NULL,
+        password VARCHAR(50) NOT NULL,
+        email_id VARCHAR(50) NOT NULL
+    )
+''')
+
+def generate_user_id():
+    return "".join(random.choices("0123", k=4))
+
+# Function to register a new user
+def register_user(user_id, full_name, username, password, email_id):
+    try:
+        cur_obj.execute("INSERT INTO users (user_id, full_name, username, password, email_id) VALUES (%s, %s, %s, %s, %s)", (user_id, full_name, username, password, email_id))
+        conn_obj.commit()
+        print("USER REGISTERED SUCCESSFULY.")
+        # Retrieve the user_id of the newly inserted user
+        cur_obj.execute("SELECT user_id FROM users WHERE username = %s", (username,))
+        result = cur_obj.fetchone()
+
+        if result:
+            user_id = result[0]
+            print(f"YOUR REGISTERED USER ID: SUVO{user_id}")
+        else:
+            print("USER ID NOT AVAILABLE")
+    except mysql.connector.Error as err:
+        print(f"Error: {err}")
+        conn_obj.rollback()
+
+# Function to authenticate an existing user
+# Giving options to upload user's details
+def existing_user(username, password):
+    cur_obj.execute("SELECT * FROM users WHERE username = %s AND password = %s", (username, password))
+    user = cur_obj.fetchall()
+    if user:
+        print("\nLOGIN SUCCESSFUL.")
+        import place_order
+        return True
+    else:
+        print("LOGIN FAILED. INVALID USER NAME OR PASSWORD.")
+        return False
+
+def genaration_pin():
+    return "".join(random.choices("0123", k=4))
+
+def forgot_password(username, password):
+    try:
+        cur_obj.execute("SELECT * FROM users WHERE username = %s", (username,))
+        user = cur_obj.fetchall()
+        if user:
+            # Update Password
+            cur_obj.execute(f"UPDATE users SET password = %s WHERE username = %s", (password, username,))
+            print("\nNEW PASSWORD UPDATE SUCCESSFULY")
+            print(f"YOUR NEW PASSWORD: {password}")
+            conn_obj.commit()
+        else:
+            print("ENTERED WRONG USERNAME")
+    except mysql.connector.Error as e:
+        print("Error retrieving data from MySQL:", e)
+        conn_obj.rollback()
+
+# LOGIN Menu
+while True:
+    print("HELLO, USER".center(50))
+    print("WELCOME TO THE SUVO RETAIL STORE MANAGEMENT SYSTEM".center(50))
+    print("\nPLEASE CONFIRM: \nARE YOU A NEW USER OR AN EXISTING USER?")
+    print("\nCHOOSE THE RIGHT OPTION BETWEEN 1 & 2:")
+    print("1. REGISTER A NEW USER")
+    print("2. LOGIN")
+    print("3. FORGET PASSWORD")
+    print("4. LOGOUT")
+
+    action = input("\nPLEASE SELECT THE OPTION: ")
+
+    if action == "1":
+        def validate_input(full_name, username, password, email_id):
+            if not (full_name.isupper() == True):
+                print("FULL NAME IS IN WRONG FORMAT, PLEASE CHECK")
+                return False
+            if not (username.find("@") != -1 and username.istitle() and len(username) < 17):
+                print("USERNAME IS WRONG, PLEASE CHECK")
+                return False
+            elif not(len(password) <= 8 and password.istitle()):
+                print("PASSWORD IS WRONG, PLEASE CHECK")
+                return False
+            elif not (email_id.find("@") != -1 and email_id.endswith(".com")):
+                print("EMAIL ID IS WRONG, PLEASE CHECK")
+                return False
+            return True
+
+        user_id = generate_user_id()
+        full_name = input("\nENTER YOUR FULL NAME(IN CAPITAL LETTERS): ")
+        username = input("\nENTER USER NAME(FORMAT: Limit - 15 Characters(Alphabet, Special Character only '@', Numbers are allowed), EX- 'Souvik@1996'): ")
+        try:
+            cur_obj.execute("SELECT * FROM users WHERE username = %s", (username,))
+            result = cur_obj.fetchall()
+
+            if result:
+                print("THIS USERNAME IS USED BEFORE")
+                break
+            else:
+                print(" ")
+        except mysql.connector.Error as err:
+            print(f"Error: {err}")
+            conn_obj.rollback()
+        password = input("\nENTER NEW PASSWORD(FORMAT: Limit - 8 Characters(Only Alphabet & Numbers), EX- 'Suvo1996'): ")
+        try:
+            cur_obj.execute("SELECT * FROM users WHERE password = %s", (password,))
+            result = cur_obj.fetchall()
+
+            if result:
+                print("THIS PASSWORD IS USED BEFORE")
+                break
+            else:
+                print(" ")
+        except mysql.connector.Error as err:
+            print(f"Error: {err}")
+            conn_obj.rollback()
+        email_id = input("\nENTER YOUR EMAIL ID: ")
+
+        if validate_input(full_name, username, password, email_id):
+            # Check for duplicate username and password in the database
+            try:
+                cur_obj.execute("SELECT username, password FROM users WHERE full_name = %s OR username = %s OR password = %s OR email_id = %s",(full_name, username, password, email_id))
+                result7 = cur_obj.fetchall()
+
+                if result7:
+                    print("THIS USER NAME OR PASSWORD CANNOT BE UPLOADED (USED)")
+                else:
+                    print("USERNAME & PASSWORD IS ACCEPTED")
+                    print(f"\nYOUR REGISTERED USER NAME: {username} AND PASSWORD: {password}")
+                    register_user(user_id, full_name, username, password, email_id)
+
+            except mysql.connector.Error as err:
+                print(f"Error: {err}")
+                conn_obj.rollback()
+        else:
+            print("PLEASE CHECK USER NAME OR PASSWORD")
+        pass
+    elif action == "2":
+        attempt = 3
+        while attempt > 0:
+            username = input(
+                "\nENTER EXISTING USERNAME(FORMAT: Limit - 16 Characters(Alphabet, Special Character only '@', Numbers are allowed), EX- 'Souvik@1996'): ")
+            password = input(
+                "\nENTER EXISTING PASSWORD(FORMAT: Limit - 8 Characters(Only Alphabet & Numbers), EX- 'Suvo1996'): ")
+
+            if existing_user(username, password):
+                break
+
+            attempt -= 1
+            print(f'YOU HAVE {attempt} ATTEMPTS REMAINING.')
+        pass
+    elif action == "3":
+        pin = genaration_pin()
+        print(f"OTP: {pin}")
+        otp = input("\nENTER OTP TO RESET PASSWORD: ")
+        if otp == pin:
+            username = input("\nENTER YOUR USERNAME: ")
+            password = input("ENTER YOUR NEW PASSWORD(FORMAT: Limit - 8 Characters(Only Alphabet & Numbers): ")
+            try:
+                cur_obj.execute("SELECT * FROM users WHERE password = %s", (password,))
+                result = cur_obj.fetchall()
+                if result:
+                    print("THIS PASSWORD IS USED BEFORE")
+                    break
+                else:
+                    print(" ")
+            except mysql.connector.Error as err:
+                print(f"Error: {err}")
+                conn_obj.rollback()
+            if len(password) <= 8:
+                print(" ")
+            else:
+                print("NOT OK")
+                break
+            forgot_password(username, password)
+        else:
+            print("YOU HAVE ENTERED WRONG OTP")
+        pass
+    elif action == "4":
+        print("LOGGED OUT")
+        break
+    else:
+        print("INVALID OPTION.")
+
+# Close the cursor and connection
+conn_obj.close()
